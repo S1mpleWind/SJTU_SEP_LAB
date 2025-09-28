@@ -13,12 +13,12 @@
 ---
 
 ## 2. TODO list
-- [ ] Frame of the program
-- [ ] Player Class
+- [x] Frame of the program
+- [x] Player Class
 - [ ] Board Class
-  - [ ] Valid Word
+  - [x] Valid Word
   - [ ] valid Path
-
+  - [ ] map < char , std :: vector < std::pair<int,int>>
 ---
 
 ## 3. Bugs
