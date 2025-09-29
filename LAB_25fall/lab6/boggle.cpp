@@ -24,7 +24,7 @@ public:
     };
 
     int getScore() const { return score; }
-    void addScore() { score++; }
+    void addScore(int a) { score+=a; }
 
 private:
     int score;
@@ -62,6 +62,7 @@ private:
     int size;
     Lexicon lexi;
     std::vector<std::vector<bool>> visited;
+    std::vector<std::pair<int,int>> playerVisited;
 
     // * private functions
     bool isNeighbor(const std::pair<int, int> &pos1, const std::pair<int, int> &pos2) const;
@@ -117,7 +118,7 @@ bool Board::isNeighbor(const std::pair<int, int> &pos1, const std::pair<int, int
     const int x2 = pos2.first;
     const int y2 = pos2.second;
 
-    if ((std::abs(x1 - x2) == 1 || y1 == y2) &&
+    if ((std::abs(x1 - x2) == 1 || x1 == x2) &&
         (std::abs(y1 - y2) == 1  || y1 == y2) &&
         !(x1 == x2 && y1 == y2)) {
         return true;
@@ -127,26 +128,29 @@ bool Board::isNeighbor(const std::pair<int, int> &pos1, const std::pair<int, int
 
 
 bool Board::isVaildWord(std::string *word) {
+
+    std::string original = *word;
+    std::transform(word->begin(), word->end(), word->begin(), ::toupper);
     // > 4 characters
     if (word->empty() || word->size() < 4) {
-        std::cout << "too short word" << std::endl;
+        std::cout << original << " is too short." << std::endl;
         return false;
     }
 
     // didn't appeared before
     for (auto &read_word: read_words) {
         if (read_word == *word) {
-            std::cout << "Word already found!" << std::endl;
+            std::cout << original <<  " is already found." << std::endl;
             return false;
         }
     }
 
     if (!isValidPath(word)) {
-        std::cout << "Word not in map" << std::endl;
+        std::cout << original << " is not on board." << std::endl;
         return false;
     }
     if (!lexi.contains(*word)) {
-        std::cout << "Word not in dictionary" << std::endl;
+        std::cout << original << " is not a word." << std::endl;
         return false;
     }
     mark_read(*word);
@@ -161,13 +165,16 @@ bool Board::isVaildWord(std::string *word) {
 //TODO : how to ensure the path is contious ?
 //! the startPos is the position of the char previously checked
 bool Board::isValidPathHelper(std::string *in_, std::pair<int, int> startPos) {
-    //base case:
+    // base case:
     if (in_->size() == 1) {
         if (!char_map.count(in_->at(0))) {
             return false;
         }
-        for (auto it = char_map[in_->at(0)].begin(); it != char_map[in_->at(0)].end(); ++it) {
-            if (isNeighbor(startPos, *it)) {
+        for (const auto &pos : char_map[in_->at(0)]) {
+            if (std::find(playerVisited.begin(), playerVisited.end(), pos) != playerVisited.end()) {
+                continue;
+            }
+            if (isNeighbor(startPos, pos)) {
                 return true;
             }
         }
@@ -176,32 +183,39 @@ bool Board::isValidPathHelper(std::string *in_, std::pair<int, int> startPos) {
         if (char_map.count(in_->at(0)) == 0) {
             return false;
         }
-        for (auto it = char_map[in_->at(0)].begin(); it != char_map[in_->at(0)].end(); ++it) {
-            if (*it != startPos && isNeighbor(startPos, *it)) {
-                std::string temp = in_->substr(1, in_->size() - 1);
-                //TODO : how to solve the issue of temporary variable?
-                //TODO : currently use a temp
-                if (isValidPathHelper(&temp, *it)) return true;
+        for (const auto &pos : char_map[in_->at(0)]) {
+            if (std::find(playerVisited.begin(), playerVisited.end(), pos) != playerVisited.end()) {
+                continue;
+            }
+            if (isNeighbor(startPos, pos)) {
+                std::string temp = in_->substr(1);
+                playerVisited.push_back(pos);
+                if (isValidPathHelper(&temp, pos)) {
+                    playerVisited.pop_back();
+                    return true;
+                }
+                playerVisited.pop_back();
             }
         }
         return false;
     }
-    //return false;
 }
 
 
 bool Board::isValidPath(std::string *check) {
     char first_char = check->at(0);
     if (!char_map.count(first_char)) {
-        //std::cout << "Not in the map"<<std::endl;
         return false;
     } else {
-        for (auto &it: char_map[first_char]) {
-            std::string temp = check->substr(1, check->size() - 1);
-            if (isValidPathHelper(&temp, it)) {
+        for (const auto &pos : char_map[first_char]) {
+            playerVisited.clear();
+            playerVisited.push_back(pos);
+            std::string temp = check->substr(1);
+            if (isValidPathHelper(&temp, pos)) {
                 return true;
             }
         }
+        playerVisited.clear();
         return false;
     }
 }
@@ -259,7 +273,7 @@ void Board::printAllWordsHelper(std::string * curr , std::pair<int,int> currPos)
 }
 
 void Board::printAllWords()  {
-    std::cout << "All possible words : " ;
+    std::cout << "All possible words:" ;
     all_words.clear();
     for (auto it = char_map.begin(); it != char_map.end(); ++it) {
         for (auto itr = it->second.begin(); itr != it->second.end(); ++itr) {
@@ -269,8 +283,9 @@ void Board::printAllWords()  {
         }
     }
     for (auto it : all_words) {
-        std::cout << it <<" ";
+        std::cout << " " << it ;
     }
+    std::cout << std::endl;
 }
 
 void Board::printBoard() const {
@@ -288,20 +303,54 @@ void Board::printBoard() const {
     }
 }
 
+// =================== Unit Test for Board ===================
+void testBoard() {
+    std::cout << "===== Boggle Board Unit Test =====" << std::endl;
+    int board_size = 5;
+    std::string test_board[5] = {
+        "EEIRD",
+        "AGMRS",
+        "CIILN",
+        "DLOTE",
+        "FRWOT"
+    };
+    Board board(test_board, board_size);
+    board.printBoard();
+
+    // 取部分你给出的单词进行测试
+    std::vector<std::string> test_words = {
+        "ACID", "AGILE", "CAGE", "CLIME", "CLOT", "DIGIT", "DIME", "DIOL", "EMIR", "EMIT", "FROLIC", "GILD", "GILT", "GIMLET", "GIRD", "GIRL", "ILIA", "IMID", "IOLITE", "LENS", "LENT", "LILT", "LIME", "LIMIT", "LOOT", "LORD", "LOTI", "MICA", "MILD", "MILE", "MILIA", "MILORD", "MILS", "MILT", "MITE", "MITT", "MITTEN", "NETT", "OILS", "OLEO", "OTTO", "RIGID", "RILE", "RIME", "RIOT", "RITE", "ROIL", "ROLE", "ROOT", "ROOTLET", "ROTE", "ROTTE", "SLOT", "SLOW", "TELOI", "TELS", "TENS", "TENT", "TILE", "TILS", "TIME", "TIMID", "TOIL", "TOILET", "TOILS", "TOLD", "TOLE", "TOOL", "TOOLS", "TOOT", "TOOTLE", "TOTE", "WOLD", "WOLF", "WOOL", "WOOLEN", "WOOLS", "WORD", "WORLD", "WROTE"
+    };
+    for (auto &w : test_words) {
+        std::string temp = w;
+        std::cout << "Checking word: " << w << " -> ";
+        if (board.isVaildWord(&temp)) {
+            std::cout << "Valid" << std::endl;
+        } else {
+            std::cout << "Invalid" << std::endl;
+        }
+    }
+    std::cout << "\nAll possible words on board:" << std::endl;
+    board.printAllWords();
+    std::cout << "===== End of Unit Test =====" << std::endl;
+}
+
 int main() {
+    // Uncomment the next line to run the unit test only
+    //testBoard();
     //* 1. data input & creating instance
     int board_size;
 
-    std::cout << "Please input the board size (n): ";
+    //std::cout << "Please input the board size (n): ";
     std::cin >> board_size;
 
-    std::cout << "Please input the board character row by row: " << std::endl;
+    //std::cout << "Please input the board character row by row: " << std::endl;
     auto inputChar = new std::string[board_size];
     for (int i = 0; i < board_size; i++) {
         std::string row_str;
         std::cin >> row_str;
         if (row_str.size() != board_size) {
-            std::cout << "Wrong input format! Please input again!" << std::endl;
+            //std::cout << "Wrong input format! Please input again!" << std::endl;
             i--;
         } else {
             inputChar[i] = row_str;
@@ -316,33 +365,16 @@ int main() {
 
     int current_player = 1;
 
-    // //TODO: TEST
-    // while (true) {
-    //     std::string input_word;
-    //     std::cin >> input_word;
-    //     std::transform(input_word.begin(), input_word.end(), input_word.begin(), ::toupper);
-    //     if (input_word == "???") {
-    //         break;
-    //     }
-    //     if (board.isVaildWord(&input_word)) {
-    //         std::cout << "Valid Word!" << std::endl;
-    //     }
-    //     else {
-    //         std::cout << "Invalid Word!" << std::endl;
-    //     }
-    // }
-
     //* 2. game circle
 
     while (true) {
-        board.printBoard();
-        std::cout << "Player " << current_player << std::endl;
-        std::cout << "Current Score: " << (current_player == 1 ? p1.getScore() : p2.getScore()) << std::endl;
+        //board.printBoard();
+        std::cout << "Player " << current_player << " Score: " << (current_player == 1 ? p1.getScore() : p2.getScore()) << std::endl;
 
         std::string input_word;
         std::cin >> input_word;
         // transform into upper characters
-        std::transform(input_word.begin(), input_word.end(), input_word.begin(), ::toupper);
+
         if (input_word == "???") {
             if (current_player == 1) {
                 current_player++;
@@ -352,19 +384,19 @@ int main() {
             break;
         }
         if (board.isVaildWord(&input_word)) {
-            std::cout << "Correct!" << std::endl;
-            current_player == 1 ? p1.addScore() : p2.addScore();
+            std::cout << "Correct." << std::endl;
+            current_player == 1 ? p1.addScore(input_word.size()-3) : p2.addScore(input_word.size()-3);
         } else {
-            std::cout << "Invalid Word!" << std::endl;
+            //std::cout << "Invalid Word!" << std::endl;
         }
     }
 
     //* 3. ending
-    std::cout << "player 1 : " << p1.getScore() << std::endl;
-    std::cout << "player 2 : " << p2.getScore() << std::endl;
+    std::cout << "Player 1 Score: " << p1.getScore() << std::endl;
+    std::cout << "Player 2 Score: " << p2.getScore() << std::endl;
 
     if (p1.getScore() == p2.getScore()) {
-        std::cout << "A Tie" << std::endl;
+        std::cout << "It's a tie!" << std::endl;
     } else if (p1.getScore() > p2.getScore()) {
         std::cout << "Player 1 wins!" << std::endl;
     } else {
