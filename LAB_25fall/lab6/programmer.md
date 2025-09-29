@@ -22,4 +22,7 @@
 ---
 
 ## 3. Bugs
+### 1). Test one
 1. In the Base Case of `validPathHelper` , I didn't check if the character exist in the board
+2. I didn't check if startpos equals to the possible next position
+3. change the logic of return in the loop to ensure all it can search all the branches.

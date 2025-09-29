@@ -1,8 +1,19 @@
+/**
+ * @file boggle.cpp
+ * @brief Accomplish a boggle game . However I used map instead of array ,
+ *        which turns out not a good idea
+ * @author J
+ * @date 2025.9.29
+ * @version 1.0
+ */
+
 #include <iostream>
 #include <map>
 #include <utility>
 #include "lexicon.h"
 #include <vector>
+#include <algorithm>
+#include <set>
 
 //? Preset Classes
 class Player {
@@ -39,16 +50,18 @@ public:
 
     void printBoard() const;
 
-    void printAllWords() const;
+    void printAllWords();
+
+    void resetRead() { read_words.clear(); }
 
 private:
     // * member variables
-
-    // the value is an array to store the same char
     std::map<const char, std::vector<std::pair<int, int> > > char_map;
     std::vector<std::string> read_words;
+    std::set<std::string> all_words;
     int size;
     Lexicon lexi;
+    std::vector<std::vector<bool>> visited;
 
     // * private functions
     bool isNeighbor(const std::pair<int, int> &pos1, const std::pair<int, int> &pos2) const;
@@ -59,23 +72,24 @@ private:
 
     // need another parameter to make sure the path is contious
     bool isValidPathHelper(std::string *in_, std::pair<int, int> startPos);
+
+    void printAllWordsHelper(std::string *curr , std::pair<int,int> currPos) ;
 };
 
 //======================= Accomplishment of Board =================
 Board::Board() {
     lexi = Lexicon();
-    //map = nullptr;
     size = -1;
+    // visited初始化为空
 }
 
 Board::Board(const std::string *str, int n) {
-    //map = in_map;
-
     size = n;
     //TODO : init map
     init_map(str);
 
     lexi = Lexicon("EnglishWords.txt");
+    visited = std::vector<std::vector<bool>>(size, std::vector<bool>(size, false)); // 初始化visited
 }
 
 
@@ -103,10 +117,11 @@ bool Board::isNeighbor(const std::pair<int, int> &pos1, const std::pair<int, int
     const int x2 = pos2.first;
     const int y2 = pos2.second;
 
-    if ((x1 - x2) % size <= 1 && (y1 - y2) % size <= 1) {
+    if ((std::abs(x1 - x2) == 1 || y1 == y2) &&
+        (std::abs(y1 - y2) == 1  || y1 == y2) &&
+        !(x1 == x2 && y1 == y2)) {
         return true;
     }
-
     return false;
 }
 
@@ -114,21 +129,28 @@ bool Board::isNeighbor(const std::pair<int, int> &pos1, const std::pair<int, int
 bool Board::isVaildWord(std::string *word) {
     // > 4 characters
     if (word->empty() || word->size() < 4) {
+        std::cout << "too short word" << std::endl;
         return false;
     }
 
     // didn't appeared before
-    for (auto &read_word: read_words) { // NOLINT(*-use-anyofallof)
+    for (auto &read_word: read_words) {
         if (read_word == *word) {
+            std::cout << "Word already found!" << std::endl;
             return false;
         }
     }
 
-    if (isValidPath(word) && lexi.contains(*word)) {
-        mark_read(*word);
-        return true;
+    if (!isValidPath(word)) {
+        std::cout << "Word not in map" << std::endl;
+        return false;
     }
-    return false;
+    if (!lexi.contains(*word)) {
+        std::cout << "Word not in dictionary" << std::endl;
+        return false;
+    }
+    mark_read(*word);
+    return true;
 }
 
 
@@ -144,22 +166,22 @@ bool Board::isValidPathHelper(std::string *in_, std::pair<int, int> startPos) {
         if (!char_map.count(in_->at(0))) {
             return false;
         }
-        for (auto it = char_map[in_->at(0)].begin(); it != char_map[in_->at(1)].end(); ++it) {
+        for (auto it = char_map[in_->at(0)].begin(); it != char_map[in_->at(0)].end(); ++it) {
             if (isNeighbor(startPos, *it)) {
                 return true;
             }
         }
         return false;
     } else {
-        if (char_map.count(in_->at(0)) == 0 ) {
+        if (char_map.count(in_->at(0)) == 0) {
             return false;
         }
-        for (auto it = char_map[in_->at(0)].begin(); it != char_map[in_->at(1)].end(); ++it) {
-            if (isNeighbor(startPos, *it)) {
+        for (auto it = char_map[in_->at(0)].begin(); it != char_map[in_->at(0)].end(); ++it) {
+            if (*it != startPos && isNeighbor(startPos, *it)) {
                 std::string temp = in_->substr(1, in_->size() - 1);
                 //TODO : how to solve the issue of temporary variable?
                 //TODO : currently use a temp
-                return isValidPathHelper(&temp, *it);
+                if (isValidPathHelper(&temp, *it)) return true;
             }
         }
         return false;
@@ -171,6 +193,7 @@ bool Board::isValidPathHelper(std::string *in_, std::pair<int, int> startPos) {
 bool Board::isValidPath(std::string *check) {
     char first_char = check->at(0);
     if (!char_map.count(first_char)) {
+        //std::cout << "Not in the map"<<std::endl;
         return false;
     } else {
         for (auto &it: char_map[first_char]) {
@@ -183,8 +206,71 @@ bool Board::isValidPath(std::string *check) {
     }
 }
 
-void Board::printAllWords() const {
-    std::cout << "All the words you have found: " << std::endl;
+void Board::printAllWordsHelper(std::string * curr , std::pair<int,int> currPos)  {
+    int x = currPos.first, y = currPos.second;
+    if (visited[x][y]) return; // if already visited
+    visited[x][y] = true; // mark the current as visted
+
+    //* pruning
+    if (!lexi.containsPrefix(*curr)) {
+        visited[x][y] = false;
+        return;
+    }
+
+    //* valid out
+    if (curr->size() >= 4 && lexi.contains(*curr)) {
+        all_words.insert(*curr);
+    }
+
+    //* traverse all the neighbors
+    static const int dx[] = {-1, -1, -1, 0, 0, 1, 1, 1};
+    static const int dy[] = {-1, 0, 1, -1, 1, -1, 0, 1};
+    for (int d = 0; d < 8; ++d) {
+        int nx = x + dx[d];
+        int ny = y + dy[d];
+
+        //check the boundaries
+        if (nx < 0 || ny < 0 || nx >= size || ny >= size) continue;
+
+        if (visited[nx][ny]) continue; // jump the visited
+
+        char nextChar = 0;
+
+        //? search backward for coordinate
+        //? I should have used arrays ...
+        for (const auto &it : char_map) {
+            for (const auto &pos : it.second) {
+                if (pos.first == nx && pos.second == ny) {
+                    nextChar = it.first;
+                    break;
+                }
+            }
+            if (nextChar) break;
+        }
+
+        // * recursion
+        if (nextChar) {
+            std::string next = *curr + nextChar;
+            printAllWordsHelper(&next, {nx, ny});
+        }
+    }
+
+    visited[x][y] = false; //* backtrack
+}
+
+void Board::printAllWords()  {
+    std::cout << "All possible words : " ;
+    all_words.clear();
+    for (auto it = char_map.begin(); it != char_map.end(); ++it) {
+        for (auto itr = it->second.begin(); itr != it->second.end(); ++itr) {
+            std::string curr(1, it->first);
+            std::fill(visited.begin(), visited.end(), std::vector<bool>(size, false)); // 每次新起点清空visited
+            printAllWordsHelper(&curr, *itr);
+        }
+    }
+    for (auto it : all_words) {
+        std::cout << it <<" ";
+    }
 }
 
 void Board::printBoard() const {
@@ -223,40 +309,69 @@ int main() {
     }
 
     Board board(inputChar, board_size);
-    board.printBoard();
+    //board.printBoard();
 
     Player p1;
     Player p2;
 
     int current_player = 1;
 
-    //TODO: TEST
-    while (true) {
-        std::string input_word;
-        std::cin >> input_word;
-        if (input_word == "???") {
-            break;
-        }
-        if (board.isVaildWord(&input_word)) {
-            std::cout << "Valid Word!" << std::endl;
-        }
-        else {
-            std::cout << "Invalid Word!" << std::endl;
-        }
-    }
+    // //TODO: TEST
+    // while (true) {
+    //     std::string input_word;
+    //     std::cin >> input_word;
+    //     std::transform(input_word.begin(), input_word.end(), input_word.begin(), ::toupper);
+    //     if (input_word == "???") {
+    //         break;
+    //     }
+    //     if (board.isVaildWord(&input_word)) {
+    //         std::cout << "Valid Word!" << std::endl;
+    //     }
+    //     else {
+    //         std::cout << "Invalid Word!" << std::endl;
+    //     }
+    // }
 
     //* 2. game circle
-    /*
+
     while (true) {
         board.printBoard();
         std::cout << "Player " << current_player << std::endl;
         std::cout << "Current Score: " << (current_player == 1 ? p1.getScore() : p2.getScore()) << std::endl;
-        //std::cout <<
+
         std::string input_word;
         std::cin >> input_word;
+        // transform into upper characters
+        std::transform(input_word.begin(), input_word.end(), input_word.begin(), ::toupper);
+        if (input_word == "???") {
+            if (current_player == 1) {
+                current_player++;
+                board.resetRead();
+                continue;
+            }
+            break;
+        }
+        if (board.isVaildWord(&input_word)) {
+            std::cout << "Correct!" << std::endl;
+            current_player == 1 ? p1.addScore() : p2.addScore();
+        } else {
+            std::cout << "Invalid Word!" << std::endl;
+        }
     }
-    */
+
     //* 3. ending
+    std::cout << "player 1 : " << p1.getScore() << std::endl;
+    std::cout << "player 2 : " << p2.getScore() << std::endl;
+
+    if (p1.getScore() == p2.getScore()) {
+        std::cout << "A Tie" << std::endl;
+    } else if (p1.getScore() > p2.getScore()) {
+        std::cout << "Player 1 wins!" << std::endl;
+    } else {
+        std::cout << "Player 2 wins!" << std::endl;
+    }
+
+    board.printAllWords();
 
     delete [] inputChar;
     return 0;
