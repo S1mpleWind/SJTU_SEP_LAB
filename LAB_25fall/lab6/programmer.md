@@ -22,3 +22,4 @@
 ---
 
 ## 3. Bugs
+1. In the Base Case of `validPathHelper` , I didn't check if the character exist in the board
