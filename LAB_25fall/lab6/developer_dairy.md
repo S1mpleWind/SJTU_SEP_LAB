@@ -15,10 +15,10 @@
 ## 2. TODO list
 - [x] Frame of the program
 - [x] Player Class
-- [ ] Board Class
+- [x] Board Class
   - [x] Valid Word
-  - [ ] valid Path
-  - [ ] map < char , std :: vector < std::pair<int,int>>
+  - [x] valid Path
+  - [x] map < char , std :: vector < std::pair<int,int>>
 ---
 
 ## 3. Bugs
@@ -26,3 +26,8 @@
 1. In the Base Case of `validPathHelper` , I didn't check if the character exist in the board
 2. I didn't check if startpos equals to the possible next position
 3. change the logic of return in the loop to ensure all it can search all the branches.
+
+### 2). Wrong Answer Judging Online
+1. lack of judging **repeating** paths in player mode
+2. the sequence of judge valid word
+3. enter and space 
